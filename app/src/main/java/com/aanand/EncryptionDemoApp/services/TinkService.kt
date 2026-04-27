@@ -97,37 +97,6 @@ class TinkService(private val context: Context) {
         return TinkEncryptionResult("", "Server Key Pair Ready ($algorithm)", publicJson)
     }
 
-    fun simulateClientSideSymmetricKeyGeneration(algorithm: String = "symmetric_aaed") {
-        val template = "AES256_GCM"
-        val cacheKey = "CLIENT_SERVER_VAULT_$algorithm"
-        val storageName = "client_server_key_$algorithm"
-        val prefFile = "client_server_prefs_$algorithm"
-
-        val manager = getManager(cacheKey, storageName, prefFile, template)
-        manager.keysetHandle.keys.get(0)?.let {
-            val publicJson = TinkJsonProtoKeysetFormat.serializeKeysetWithoutSecret(manager.keysetHandle)
-            encryptHybrid(publicJson, "", "DHKEM" )
-            sendKeyToServer(publicJson, algorithm)
-        }
-    }
-
-    fun sendKeyToServer(publicKeyJson: String, algorithm: String) {
-        // In a real app, this would be an API call to the server.
-        // For this simulation, we directly persist it locally as if the server sent it back.
-        val keysetHandle = CleartextKeysetHandle.read(JsonKeysetReader.withString(publicKeyJson))
-        val storageName = "client_server_key_$algorithm"
-        val prefFile = "client_server_prefs_$algorithm"
-
-        // FIX: Use CleartextKeysetHandle.write for public keys (non-encrypted storage)
-        // Calling keysetHandle.write(writer, null) was triggering Aead.encrypt on a null object.
-        CleartextKeysetHandle.write(
-            keysetHandle,
-            SharedPrefKeysetWriter(context, storageName, prefFile)
-        )
-
-        managerCache.remove("CLIENT_VAULT_$algorithm")
-    }
-
 
 
     fun persistServerKeyLocally(publicKeyJson: String, algorithm: String) {
