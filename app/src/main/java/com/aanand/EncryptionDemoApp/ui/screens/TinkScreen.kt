@@ -9,6 +9,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -20,6 +22,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -41,7 +44,28 @@ fun TinkScreen(
     viewModel: TinkViewModel = koinViewModel()
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
+    var showInfoDialog by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
+
+    if (showInfoDialog) {
+        AlertDialog(
+            onDismissRequest = { showInfoDialog = false },
+            title = { Text("Hybrid Encryption Security") },
+            text = {
+                Text(
+                    "Hybrid Encryption only provides privacy, not authenticity.\n\n" +
+                    "It is only secure if the recipient can accept anonymous messages or rely on other mechanisms to authenticate the sender.\n\n" +
+                    "If authentication is required, the sender should sign the message with their private key and the recipient should verify it with the sender's public key.\n\n" +
+                    "This can be done using Signing constructs of Tink. Additionally, for a 2-way signature check, this can be done from both client and server sides."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showInfoDialog = false }) {
+                    Text("Got it")
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -50,6 +74,11 @@ fun TinkScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showInfoDialog = true }) {
+                        Icon(Icons.Default.Info, contentDescription = "Security Info")
                     }
                 }
             )

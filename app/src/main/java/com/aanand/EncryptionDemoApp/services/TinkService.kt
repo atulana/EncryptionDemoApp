@@ -114,6 +114,13 @@ class TinkService(private val context: Context) {
         managerCache.remove("CLIENT_VAULT_$algorithm")
     }
 
+    // Hybrid Encryption only provides privacy, not authenticity.
+    // It is only secure if the recipient can accept anonymous messages or rely on other mechanisms to authenticate the sender.
+    // If authentication is required,
+    // The sender should sign the message with their private key and the recipient should verify it with the sender's public key.
+    // This can be done using Signing constructs of Tink
+    // Additional for a 2 way signature check this can be done both from client and servers side
+
     fun encryptHybrid(input: String, contextInfo: String, algorithm: String): String {
         val storageName = "client_server_key_$algorithm"
         val prefFile = "client_server_prefs_$algorithm"
