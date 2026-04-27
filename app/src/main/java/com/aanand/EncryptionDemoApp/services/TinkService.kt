@@ -7,6 +7,7 @@ import com.google.crypto.tink.HybridDecrypt
 import com.google.crypto.tink.HybridEncrypt
 import com.google.crypto.tink.JsonKeysetReader
 import com.google.crypto.tink.KeyTemplates
+import com.google.crypto.tink.RegistryConfiguration
 import com.google.crypto.tink.TinkJsonProtoKeysetFormat
 import com.google.crypto.tink.aead.AeadConfig
 import com.google.crypto.tink.hybrid.HybridConfig
@@ -46,7 +47,7 @@ class TinkService(private val context: Context) {
         }
     }
 
-    private fun isAsymmetric(template: String) = template.startsWith("RSA") || template.startsWith("ECIES") || template.startsWith("DHKEM")
+    private fun isAsymmetric(template: String) = template.startsWith("DH") || template.startsWith("ECIES") || template.startsWith("DHKEM")
 
     fun encryptStandard(input: String, useCase: String, templateName: String, aad: String): TinkEncryptionResult {
         val algoPrefix = if (isAsymmetric(templateName)) "ASYM" else "SYM"
@@ -57,11 +58,11 @@ class TinkService(private val context: Context) {
         val manager = getManager(cacheKey, storageName, prefFile, templateName)
         
         return if (isAsymmetric(templateName)) {
-            val hybridEncrypt = manager.keysetHandle.publicKeysetHandle.getPrimitive(HybridEncrypt::class.java)
+            val hybridEncrypt = manager.keysetHandle.publicKeysetHandle.getPrimitive(RegistryConfiguration.get(), HybridEncrypt::class.java)
             val encrypted = hybridEncrypt.encrypt(input.toByteArray(), aad.toByteArray())
             TinkEncryptionResult(Base64.getEncoder().encodeToString(encrypted), "Asymmetric Active")
         } else {
-            val aead = manager.keysetHandle.getPrimitive(Aead::class.java)
+            val aead = manager.keysetHandle.getPrimitive(RegistryConfiguration.get(), Aead::class.java)
             val encrypted = aead.encrypt(input.toByteArray(), aad.toByteArray())
             TinkEncryptionResult(Base64.getEncoder().encodeToString(encrypted), "Symmetric Active")
         }
@@ -76,17 +77,17 @@ class TinkService(private val context: Context) {
         val manager = getManager(cacheKey, storageName, prefFile)
         
         return if (isAsymmetric(templateName)) {
-            val hybridDecrypt = manager.keysetHandle.getPrimitive(HybridDecrypt::class.java)
+            val hybridDecrypt = manager.keysetHandle.getPrimitive(RegistryConfiguration.get(), HybridDecrypt::class.java)
             String(hybridDecrypt.decrypt(Base64.getDecoder().decode(ciphertext), aad.toByteArray()))
         } else {
-            val aead = manager.keysetHandle.getPrimitive(Aead::class.java)
+            val aead = manager.keysetHandle.getPrimitive(RegistryConfiguration.get(), Aead::class.java)
             String(aead.decrypt(Base64.getDecoder().decode(ciphertext), aad.toByteArray()))
         }
     }
 
     // Isolated Hybrid Simulation Methods
     fun simulateServerKeyGeneration(algorithm: String): TinkEncryptionResult {
-        val template = if (algorithm == "RSA") "RSA_OAEP_3072_SHA256_AES128_GCM" else "ECIES_P256_HKDF_HMAC_SHA256_AES128_GCM"
+        val template = if (algorithm == "DHKEM") "DHKEM_X25519_HKDF_SHA256_HKDF_SHA256_AES_256_GCM" else "ECIES_P256_HKDF_HMAC_SHA256_AES128_GCM"
         val cacheKey = "SERVER_VAULT_$algorithm"
         val storageName = "server_keyset_$algorithm"
         val prefFile = "server_prefs_$algorithm"
@@ -95,6 +96,39 @@ class TinkService(private val context: Context) {
         val publicJson = TinkJsonProtoKeysetFormat.serializeKeysetWithoutSecret(manager.keysetHandle.publicKeysetHandle)
         return TinkEncryptionResult("", "Server Key Pair Ready ($algorithm)", publicJson)
     }
+
+    fun simulateClientSideSymmetricKeyGeneration(algorithm: String = "symmetric_aaed") {
+        val template = "AES256_GCM"
+        val cacheKey = "CLIENT_SERVER_VAULT_$algorithm"
+        val storageName = "client_server_key_$algorithm"
+        val prefFile = "client_server_prefs_$algorithm"
+
+        val manager = getManager(cacheKey, storageName, prefFile, template)
+        manager.keysetHandle.keys.get(0)?.let {
+            val publicJson = TinkJsonProtoKeysetFormat.serializeKeysetWithoutSecret(manager.keysetHandle)
+            encryptHybrid(publicJson, "", "DHKEM" )
+            sendKeyToServer(publicJson, algorithm)
+        }
+    }
+
+    fun sendKeyToServer(publicKeyJson: String, algorithm: String) {
+        // In a real app, this would be an API call to the server.
+        // For this simulation, we directly persist it locally as if the server sent it back.
+        val keysetHandle = CleartextKeysetHandle.read(JsonKeysetReader.withString(publicKeyJson))
+        val storageName = "client_server_key_$algorithm"
+        val prefFile = "client_server_prefs_$algorithm"
+
+        // FIX: Use CleartextKeysetHandle.write for public keys (non-encrypted storage)
+        // Calling keysetHandle.write(writer, null) was triggering Aead.encrypt on a null object.
+        CleartextKeysetHandle.write(
+            keysetHandle,
+            SharedPrefKeysetWriter(context, storageName, prefFile)
+        )
+
+        managerCache.remove("CLIENT_VAULT_$algorithm")
+    }
+
+
 
     fun persistServerKeyLocally(publicKeyJson: String, algorithm: String) {
         val keysetHandle = CleartextKeysetHandle.read(JsonKeysetReader.withString(publicKeyJson))
@@ -116,7 +150,7 @@ class TinkService(private val context: Context) {
         val prefFile = "client_server_prefs_$algorithm"
         
         val manager = getManager("CLIENT_VAULT_$algorithm", storageName, prefFile, useMasterKey = false)
-        val hybridEncrypt = manager.keysetHandle.getPrimitive(HybridEncrypt::class.java)
+        val hybridEncrypt = manager.keysetHandle.getPrimitive(RegistryConfiguration.get(), HybridEncrypt::class.java)
         return Base64.getEncoder().encodeToString(hybridEncrypt.encrypt(input.toByteArray(), contextInfo.toByteArray()))
     }
 
@@ -125,7 +159,7 @@ class TinkService(private val context: Context) {
         val prefFile = "server_prefs_$algorithm"
         
         val manager = getManager("SERVER_VAULT_$algorithm", storageName, prefFile)
-        val hybridDecrypt = manager.keysetHandle.getPrimitive(HybridDecrypt::class.java)
+        val hybridDecrypt = manager.keysetHandle.getPrimitive(RegistryConfiguration.get(), HybridDecrypt::class.java)
         return String(hybridDecrypt.decrypt(Base64.getDecoder().decode(ciphertext), contextInfo.toByteArray()))
     }
 }

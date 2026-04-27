@@ -58,7 +58,7 @@ fun TinkScreen(
         Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             TabRow(selectedTabIndex = selectedTab) {
                 Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }) {
-                    Text("Standard (AEAD/RSA)", modifier = Modifier.padding(16.dp))
+                    Text("Standard (AEAD/DHKEM)", modifier = Modifier.padding(16.dp))
                 }
                 Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }) {
                     Text("Isolated (Hybrid Simulation)", modifier = Modifier.padding(16.dp))
@@ -97,13 +97,13 @@ fun StandardContent(viewModel: TinkViewModel, focusManager: androidx.compose.ui.
         "AES128_GCM", 
         "AES256_GCM", 
         "CHACHA20_POLY1305",
-        "RSA_OAEP_3072_SHA256_AES128_GCM"
+        "DHKEM_X25519_HKDF_SHA256_HKDF_SHA256_AES_256_GCM"
     )
 
-    val isAsymmetric = template.startsWith("RSA") || template.startsWith("ECIES")
+    val isAsymmetric = template.startsWith("DH") || template.startsWith("ECIES")
 
     Text(
-        text = if (isAsymmetric) "Asymmetric Encryption: Uses RSA-OAEP Hybrid to securely encrypt/decrypt data."
+        text = if (isAsymmetric) "Asymmetric Encryption: Uses DHKEM-AES Hybrid to securely encrypt/decrypt data."
                else "Symmetric Encryption: Use high-level AEAD templates for fast, authenticated local encryption.",
         style = MaterialTheme.typography.bodyMedium
     )
@@ -130,7 +130,7 @@ fun StandardContent(viewModel: TinkViewModel, focusManager: androidx.compose.ui.
         selectedOption = template,
         onOptionSelected = { template = it },
         helpTitle = "Tink Templates",
-        helpContent = "Tink groups all low-level settings into audited templates.\n\n• GCM: Symmetric.\n• RSA_OAEP: Asymmetric Hybrid."
+        helpContent = "Tink groups all low-level settings into audited templates.\n\n• GCM: Symmetric.\n• DHKEM-AES: Asymmetric Hybrid."
     )
 
     Row(modifier = Modifier.padding(vertical = 16.dp)) {
@@ -182,7 +182,7 @@ fun IsolatedHybridContent(viewModel: TinkViewModel, focusManager: androidx.compo
     var decrypted by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
 
-    val algorithms = listOf("ECIES", "RSA")
+    val algorithms = listOf("ECIES", "DHKEM")
 
     Text("Isolated Workflow: Server generates key -> Client imports -> Client uses vault key.", style = MaterialTheme.typography.bodyMedium)
 
@@ -194,7 +194,7 @@ fun IsolatedHybridContent(viewModel: TinkViewModel, focusManager: androidx.compo
                 selectedOption = selectedAlgorithm,
                 onOptionSelected = { selectedAlgorithm = it },
                 helpTitle = "Hybrid Algorithms",
-                helpContent = "ECIES uses Curves. RSA uses factorization."
+                helpContent = "ECIES uses Curves."
             )
         }
         Button(onClick = {
